@@ -3,37 +3,96 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rosa Tech — Validador Motor</title>
+  <title>Rosa Tech — Captura Pose</title>
+  
+  <!-- MediaPipe CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; padding: 20px; margin: 0; }
-    .card { background: #1e293b; padding: 20px; border-radius: 12px; border-left: 5px solid #38bdf8; margin-top: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3); }
-    .title { color: #38bdf8; font-weight: bold; font-size: 18px; margin-bottom: 10px; }
-    .alert { color: #f87171; font-weight: bold; font-size: 16px; }
-    pre { background: #020617; padding: 12px; border-radius: 8px; overflow-x: auto; color: #38bdf8; font-size: 13px; }
+    .container { display: flex; flex-direction: column; align-items: center; gap: 15px; }
+    .viewport { position: relative; width: 100%; max-width: 640px; aspect-ratio: 4/3; background: #000; border-radius: 12px; overflow: hidden; }
+    video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+    .status { background: #1e293b; padding: 12px 20px; border-radius: 8px; border-left: 4px solid #38bdf8; width: 100%; max-width: 600px; }
+    .btn { background: #0284c7; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; }
   </style>
 </head>
 <body>
 
-  <h2>🧪 Validador del Motor ROSA Tech</h2>
-  <p>Ejecutando evaluación de prueba directamente en la tablet...</p>
+  <div class="container">
+    <h2>📷 ROSA Tech — Detección de Postura</h2>
 
-  <div id="resultado" class="card">Procesando cálculo del motor...</div>
+    <div class="viewport">
+      <video id="input_video" playsinline></video>
+      <canvas id="output_canvas"></canvas>
+    </div>
 
-  <!-- Carga del motor -->
+    <button id="btn_cam" class="btn" onclick="iniciarCamara()">Iniciar Cámara</button>
+
+    <div class="status" id="status_box">
+      <strong>Estado:</strong> Esperando activación de cámara...
+    </div>
+  </div>
+
   <script src="./rosaEngine.js"></script>
 
   <script>
-    const datosPrueba = {
-      silla: { altura: 2, profundidad: 2, ajustesAsiento: 1, apoyabrazos: 2, ajustesApoyabrazos: 1, respaldo: 2, ajustesRespaldo: 1, tiempoUso: 1 },
-      pantalla: { posicion: 3, ajustes: 1, tiempoUso: 1 },
-      telefono: { posicion: 2, ajustes: 2 },
-      teclado: { posicion: 2, ajustes: 1, tiempoUso: 1 },
-      mouse: { posicion: 2, ajustes: 1 }
-    };
+    const videoElement = document.getElementById('input_video');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const statusBox = document.getElementById('status_box');
 
-    try {
-      const res = calcularRosa(datosPrueba);
+    const pose = new Pose({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+    });
 
+    pose.setOptions({
+      modelComplexity: 1,
+      smoothLandmarks: true,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+
+    pose.onResults(onResults);
+
+    function onResults(results) {
+      canvasElement.width = videoElement.videoWidth;
+      canvasElement.height = videoElement.videoHeight;
+
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      if (results.poseLandmarks) {
+        // Dibujar puntos de referencia
+        for (const landmark of results.poseLandmarks) {
+          canvasCtx.beginPath();
+          canvasCtx.arc(landmark.x * canvasElement.width, landmark.y * canvasElement.height, 4, 0, 2 * Math.PI);
+          canvasCtx.fillStyle = '#38bdf8';
+          canvasCtx.fill();
+        }
+        statusBox.innerHTML = `<strong>Estado:</strong> Puntos articulares detectados (${results.poseLandmarks.length})`;
+      } else {
+        statusBox.innerHTML = `<strong>Estado:</strong> Buscando postura en pantalla...`;
+      }
+      canvasCtx.restore();
+    }
+
+    async function iniciarCamara() {
+      statusBox.innerHTML = `<strong>Estado:</strong> Solicitando acceso a la cámara...`;
+      const camera = new Camera(videoElement, {
+        onFrame: async () => {
+          await pose.send({image: videoElement});
+        },
+        width: 640,
+        height: 480
+      });
+      await camera.start();
+      document.getElementById('btn_cam').style.display = 'none';
+    }
+  </script>
+</body>
+</html>
       document.getElementById('resultado').innerHTML = `
         <div class="title">✓ Motor ROSA Operativo</div>
         <p><strong>Score Silla:</strong> ${res.score_silla}</p>
