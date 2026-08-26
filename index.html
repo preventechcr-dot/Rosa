@@ -40,7 +40,7 @@
 
     <!-- Botones de Control de Cámara -->
     <div class="controls-row" id="controles_camara">
-      <button id="btn_cam" class="btn" onclick="iniciarCamara()">Iniciar Evaluación</button>
+      <button id="btn_cam" class="btn" onclick="iniciarCamara('user')">Iniciar Evaluación</button>
     </div>
 
     <div class="panel-grid">
@@ -188,13 +188,21 @@
     async function iniciarCamara(facing = 'user') {
       try {
         currentFacingMode = facing;
+
         if (cameraInstance) {
           await cameraInstance.stop();
+          cameraInstance = null;
+        }
+
+        if (videoElement.srcObject) {
+          const tracks = videoElement.srcObject.getTracks();
+          tracks.forEach(track => track.stop());
+          videoElement.srcObject = null;
         }
 
         cameraInstance = new Camera(videoElement, {
           onFrame: async () => {
-            await pose.send({image: videoElement});
+            await pose.send({ image: videoElement });
           },
           width: 640,
           height: 480,
@@ -203,14 +211,18 @@
 
         await cameraInstance.start();
 
-        // Reemplazar el botón de inicio por los controles activos (Cambiar cámara y Salir)
         document.getElementById('controles_camara').innerHTML = `
-          <button class="btn btn-secondary" onclick="cambiarCamara()">🔄 Cambiar Cámara</button>
+          <button class="btn btn-secondary" onclick="cambiarCamara()">🔄 Cambiar Cámara (${currentFacingMode === 'user' ? 'Trasera' : 'Frontal'})</button>
           <button class="btn btn-danger" onclick="apagarCamara()">⏹ Salir de Cámara</button>
         `;
       } catch (err) {
-        const txt = document.getElementById('texto_riesgo');
-        if (txt) txt.innerText = `Error al acceder a la cámara: ${err.message}`;
+        if (facing === 'environment') {
+          console.warn("Cámara trasera no disponible, reintentando con frontal...");
+          iniciarCamara('user');
+        } else {
+          const txt = document.getElementById('texto_riesgo');
+          if (txt) txt.innerText = `Error al acceder a la cámara: ${err.message}`;
+        }
       }
     }
 
@@ -231,15 +243,13 @@
         videoElement.srcObject = null;
       }
 
-      // Limpiar canvas y scores
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
       document.getElementById('score_silla').innerText = '-';
       document.getElementById('score_pantalla').innerText = '-';
       document.getElementById('score_teclado').innerText = '-';
       document.getElementById('score_final').innerText = '--';
-      document.getElementById('texto_riesgo').innerText = 'Cámara detenida.';
+      document.getElementById('texto_riesgo').innerText = 'Evaluación finalizada. Cámara apagada.';
 
-      // Restaurar botón inicial
       document.getElementById('controles_camara').innerHTML = `
         <button id="btn_cam" class="btn" onclick="iniciarCamara('user')">Iniciar Evaluación</button>
       `;
