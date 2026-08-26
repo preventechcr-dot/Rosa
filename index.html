@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ROSA Tech — Evaluación Ergonómica Avanzada</title>
+  <title>ROSA Tech — Evaluación Ergonómica</title>
   
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
@@ -14,6 +14,11 @@
     .viewport { position: relative; width: 100%; max-width: 640px; aspect-ratio: 4/3; background: #000; border-radius: 12px; overflow: hidden; }
     video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
     
+    .controls-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+    .btn { background: #0284c7; color: white; border: none; padding: 10px 20px; font-size: 14px; font-weight: bold; border-radius: 8px; cursor: pointer; }
+    .btn-secondary { background: #334155; }
+    .btn-danger { background: #e11d48; }
+
     .panel-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; max-width: 620px; }
     .card { background: #1e293b; padding: 12px; border-radius: 8px; border-top: 4px solid #38bdf8; text-align: center; }
     .card-title { font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: bold; }
@@ -21,7 +26,6 @@
     
     .risk-banner { width: 100%; max-width: 600px; background: #1e293b; padding: 15px; border-radius: 8px; border-left: 5px solid #f87171; text-align: center; }
     .risk-score { font-size: 28px; font-weight: bold; color: #f87171; }
-    .btn { background: #0284c7; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -34,7 +38,10 @@
       <canvas id="output_canvas"></canvas>
     </div>
 
-    <button id="btn_cam" class="btn" onclick="iniciarCamara()">Iniciar Evaluación</button>
+    <!-- Botones de Control de Cámara -->
+    <div class="controls-row" id="controles_camara">
+      <button id="btn_cam" class="btn" onclick="iniciarCamara()">Iniciar Evaluación</button>
+    </div>
 
     <div class="panel-grid">
       <div class="card">
@@ -64,6 +71,9 @@
     const videoElement = document.getElementById('input_video');
     const canvasElement = document.getElementById('output_canvas');
     const canvasCtx = canvasElement.getContext('2d');
+
+    let cameraInstance = null;
+    let currentFacingMode = 'user'; // 'user' = frontal, 'environment' = trasera
 
     const POSE_CONNECTIONS = [
       [11, 12], [11, 13], [13, 15],
@@ -103,7 +113,6 @@
       if (results.poseLandmarks) {
         const lm = results.poseLandmarks;
 
-        // Cálculos angulares
         let anguloCodo = 0;
         let inclinacionCuello = 0;
 
@@ -114,10 +123,8 @@
           inclinacionCuello = Math.round(Math.abs(lm[7].x - lm[11].x) * 100);
         }
 
-        // Color dinámico según rango fisiológico
         const colorEstado = (anguloCodo >= 80 && anguloCodo <= 110) ? '#4ade80' : '#f87171';
 
-        // Dibujar esqueleto articular
         canvasCtx.strokeStyle = colorEstado;
         canvasCtx.lineWidth = 3;
         for (const conn of POSE_CONNECTIONS) {
@@ -138,36 +145,21 @@
           canvasCtx.fill();
         }
 
-        // Renderizado HUD (Etiquetas sobre articulaciones)
         if (lm[13]) {
           canvasCtx.fillStyle = '#ffffff';
-          canvasCtx.font = 'bold 14px sans-serif';
-          canvasCtx.fillText(`${anguloCodo}°`, lm[13].x * canvasElement.width + 10, lm[13].y * canvasElement.height);
+          canvasCtx.font = 'bold 14px system-ui';
+          canvasCtx.fillText(`${anguloCodo}°`, lm[13].x * canvasElement.width + 8, lm[13].y * canvasElement.height);
         }
 
-        // Mapeo a motor ROSA
         const datosCaptura = {
           silla: { 
-            altura: 2, 
-            profundidad: 2, 
-            ajustesAsiento: 1, 
-            apoyabrazos: 2, 
-            ajustesApoyabrazos: 1, 
-            respaldo: inclinacionCuello > 15 ? 3 : 2, 
-            ajustesRespaldo: 1, 
-            tiempoUso: 1 
+            altura: 2, profundidad: 2, ajustesAsiento: 1, apoyabrazos: 2, 
+            ajustesApoyabrazos: 1, respaldo: inclinacionCuello > 15 ? 3 : 2, 
+            ajustesRespaldo: 1, tiempoUso: 1 
           },
-          pantalla: { 
-            posicion: inclinacionCuello > 15 ? 3 : 1, 
-            ajustes: 1, 
-            tiempoUso: 1 
-          },
+          pantalla: { posicion: inclinacionCuello > 15 ? 3 : 1, ajustes: 1, tiempoUso: 1 },
           telefono: { posicion: 2, ajustes: 1, tiempoUso: 1 },
-          teclado: { 
-            posicion: (anguloCodo < 80 || anguloCodo > 110) ? 3 : 1, 
-            ajustes: 1, 
-            tiempoUso: 1 
-          },
+          teclado: { posicion: (anguloCodo < 80 || anguloCodo > 110) ? 3 : 1, ajustes: 1, tiempoUso: 1 },
           mouse: { posicion: 2, ajustes: 1 }
         };
 
@@ -193,21 +185,64 @@
       canvasCtx.restore();
     }
 
-    async function iniciarCamara() {
+    async function iniciarCamara(facing = 'user') {
       try {
-        const camera = new Camera(videoElement, {
+        currentFacingMode = facing;
+        if (cameraInstance) {
+          await cameraInstance.stop();
+        }
+
+        cameraInstance = new Camera(videoElement, {
           onFrame: async () => {
             await pose.send({image: videoElement});
           },
           width: 640,
-          height: 480
+          height: 480,
+          facingMode: currentFacingMode
         });
-        await camera.start();
-        document.getElementById('btn_cam').style.display = 'none';
+
+        await cameraInstance.start();
+
+        // Reemplazar el botón de inicio por los controles activos (Cambiar cámara y Salir)
+        document.getElementById('controles_camara').innerHTML = `
+          <button class="btn btn-secondary" onclick="cambiarCamara()">🔄 Cambiar Cámara</button>
+          <button class="btn btn-danger" onclick="apagarCamara()">⏹ Salir de Cámara</button>
+        `;
       } catch (err) {
         const txt = document.getElementById('texto_riesgo');
         if (txt) txt.innerText = `Error al acceder a la cámara: ${err.message}`;
       }
+    }
+
+    function cambiarCamara() {
+      const nuevoFacing = currentFacingMode === 'user' ? 'environment' : 'user';
+      iniciarCamara(nuevoFacing);
+    }
+
+    async function apagarCamara() {
+      if (cameraInstance) {
+        await cameraInstance.stop();
+        cameraInstance = null;
+      }
+
+      if (videoElement.srcObject) {
+        const tracks = videoElement.srcObject.getTracks();
+        tracks.forEach(track => track.stop());
+        videoElement.srcObject = null;
+      }
+
+      // Limpiar canvas y scores
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      document.getElementById('score_silla').innerText = '-';
+      document.getElementById('score_pantalla').innerText = '-';
+      document.getElementById('score_teclado').innerText = '-';
+      document.getElementById('score_final').innerText = '--';
+      document.getElementById('texto_riesgo').innerText = 'Cámara detenida.';
+
+      // Restaurar botón inicial
+      document.getElementById('controles_camara').innerHTML = `
+        <button id="btn_cam" class="btn" onclick="iniciarCamara('user')">Iniciar Evaluación</button>
+      `;
     }
   </script>
 </body>
