@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rosa Tech — Análisis Biomecánico</title>
+  <title>ROSA Tech — Evaluación Ergonómica</title>
   
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
@@ -13,34 +13,48 @@
     .container { display: flex; flex-direction: column; align-items: center; gap: 15px; }
     .viewport { position: relative; width: 100%; max-width: 640px; aspect-ratio: 4/3; background: #000; border-radius: 12px; overflow: hidden; }
     video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
-    .metrics-panel { background: #1e293b; padding: 15px; border-radius: 8px; width: 100%; max-width: 610px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
-    .metric { background: #0f172a; padding: 10px; border-radius: 6px; border-left: 3px solid #38bdf8; }
-    .metric-title { font-size: 12px; color: #94a3b8; text-transform: uppercase; }
-    .metric-value { font-size: 18px; font-weight: bold; color: #38bdf8; margin-top: 4px; }
+    
+    .panel-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 100%; max-width: 620px; }
+    .card { background: #1e293b; padding: 12px; border-radius: 8px; border-top: 4px solid #38bdf8; text-align: center; }
+    .card-title { font-size: 11px; color: #94a3b8; text-transform: uppercase; font-weight: bold; }
+    .card-value { font-size: 22px; font-weight: bold; color: #38bdf8; margin-top: 4px; }
+    
+    .risk-banner { width: 100%; max-width: 600px; background: #1e293b; padding: 15px; border-radius: 8px; border-left: 5px solid #f87171; text-align: center; }
+    .risk-score { font-size: 28px; font-weight: bold; color: #f87171; }
     .btn { background: #0284c7; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; }
   </style>
 </head>
 <body>
 
   <div class="container">
-    <h2>📐 ROSA Tech — Análisis Biomecánico</h2>
+    <h2>📊 ROSA Tech — Evaluación en Tiempo Real</h2>
 
     <div class="viewport">
       <video id="input_video" playsinline></video>
       <canvas id="output_canvas"></canvas>
     </div>
 
-    <button id="btn_cam" class="btn" onclick="iniciarCamara()">Iniciar Análisis</button>
+    <button id="btn_cam" class="btn" onclick="iniciarCamara()">Iniciar Evaluación</button>
 
-    <div class="metrics-panel">
-      <div class="metric">
-        <div class="metric-title">Ángulo de Codo</div>
-        <div class="metric-value" id="val_codo">--°</div>
+    <div class="panel-grid">
+      <div class="card">
+        <div class="card-title">Score Silla</div>
+        <div class="card-value" id="score_silla">-</div>
       </div>
-      <div class="metric">
-        <div class="metric-title">Inclinación Cuello</div>
-        <div class="metric-value" id="val_cuello">--°</div>
+      <div class="card">
+        <div class="card-title">Score Pantalla</div>
+        <div class="card-value" id="score_pantalla">-</div>
       </div>
+      <div class="card">
+        <div class="card-title">Score Teclado</div>
+        <div class="card-value" id="score_teclado">-</div>
+      </div>
+    </div>
+
+    <div class="risk-banner" id="banner_riesgo">
+      <div>PUNTUACIÓN FINAL ROSA</div>
+      <div class="risk-score" id="score_final">--</div>
+      <div id="texto_riesgo" style="color: #94a3b8;">Inicie la cámara para calcular riesgo</div>
     </div>
   </div>
 
@@ -51,11 +65,10 @@
     const canvasElement = document.getElementById('output_canvas');
     const canvasCtx = canvasElement.getContext('2d');
 
-    // Conexiones estructurales clave para ROSA
     const POSE_CONNECTIONS = [
-      [11, 12], [11, 13], [13, 15], // Brazo izquierdo (Hombro-Codo-Muñeca)
-      [12, 14], [14, 16],           // Brazo derecho
-      [11, 23], [12, 24], [23, 24]  // Tronco (Hombros a Caderas)
+      [11, 12], [11, 13], [13, 15],
+      [12, 14], [14, 16],
+      [11, 23], [12, 24], [23, 24]
     ];
 
     function calcularAngulo(p1, p2, p3) {
@@ -88,7 +101,7 @@
       if (results.poseLandmarks) {
         const lm = results.poseLandmarks;
 
-        // Trazado de líneas articulares
+        // Dibujar esqueleto
         canvasCtx.strokeStyle = '#0284c7';
         canvasCtx.lineWidth = 3;
         for (const conn of POSE_CONNECTIONS) {
@@ -102,7 +115,6 @@
           }
         }
 
-        // Trazado de puntos
         for (const landmark of lm) {
           canvasCtx.beginPath();
           canvasCtx.arc(landmark.x * canvasElement.width, landmark.y * canvasElement.height, 4, 0, 2 * Math.PI);
@@ -110,16 +122,56 @@
           canvasCtx.fill();
         }
 
-        // Cálculos angulares en tiempo real (Ejemplo: Codo izquierdo 11-13-15)
+        // Mapeo biomecánico a parámetros ROSA
         if (lm[11] && lm[13] && lm[15]) {
           const anguloCodo = calcularAngulo(lm[11], lm[13], lm[15]);
-          document.getElementById('val_codo').innerText = `${anguloCodo}°`;
-        }
+          const inclinacionCuello = Math.round(Math.abs(lm[7].x - lm[11].x) * 100);
 
-        // Inclinación de cabeza/cuello (Oreja-Hombro relativa)
-        if (lm[7] && lm[11]) {
-          const anguloCuello = Math.round(Math.abs(lm[7].x - lm[11].x) * 100);
-          document.getElementById('val_cuello').innerText = `${anguloCuello}°`;
+          // Construcción dinámica de entrada para rosaEngine.js
+          const datosCaptura = {
+            silla: { 
+              altura: 2, 
+              profundidad: 2, 
+              ajustesAsiento: 1, 
+              apoyabrazos: 2, 
+              ajustesApoyabrazos: 1, 
+              respaldo: inclinacionCuello > 15 ? 3 : 2, 
+              ajustesRespaldo: 1, 
+              tiempoUso: 1 
+            },
+            pantalla: { 
+              posicion: inclinacionCuello > 15 ? 3 : 1, 
+              ajustes: 1, 
+              tiempoUso: 1 
+            },
+            telefono: { posicion: 2, ajustes: 1, tiempoUso: 1 },
+            teclado: { 
+              posicion: (anguloCodo < 80 || anguloCodo > 110) ? 3 : 1, 
+              ajustes: 1, 
+              tiempoUso: 1 
+            },
+            mouse: { posicion: 2, ajustes: 1 }
+          };
+
+          if (typeof evaluarROSA === 'function') {
+            const evaluacion = evaluarROSA(datosCaptura);
+            
+            document.getElementById('score_silla').innerText = evaluacion.score_silla;
+            document.getElementById('score_pantalla').innerText = evaluacion.score_pantalla_telefono;
+            document.getElementById('score_teclado').innerText = evaluacion.score_teclado_mouse;
+            document.getElementById('score_final').innerText = evaluacion.puntuacion_final;
+            document.getElementById('texto_riesgo').innerText = evaluacion.nivel_riesgo;
+
+            // Ajustar color del banner según el nivel de riesgo
+            const banner = document.getElementById('banner_riesgo');
+            if (evaluacion.puntuacion_final >= 5) {
+              banner.style.borderColor = '#f87171';
+              document.getElementById('score_final').style.color = '#f87171';
+            } else {
+              banner.style.borderColor = '#4ade80';
+              document.getElementById('score_final').style.color = '#4ade80';
+            }
+          }
         }
       }
       canvasCtx.restore();
