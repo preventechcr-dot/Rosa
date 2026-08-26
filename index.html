@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ROSA Tech — Evaluación Ergonómica</title>
+  <title>ROSA Tech — Evaluación Ergonómica Avanzada</title>
   
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
@@ -103,8 +103,22 @@
       if (results.poseLandmarks) {
         const lm = results.poseLandmarks;
 
-        // Dibujar esqueleto
-        canvasCtx.strokeStyle = '#0284c7';
+        // Cálculos angulares
+        let anguloCodo = 0;
+        let inclinacionCuello = 0;
+
+        if (lm[11] && lm[13] && lm[15]) {
+          anguloCodo = calcularAngulo(lm[11], lm[13], lm[15]);
+        }
+        if (lm[7] && lm[11]) {
+          inclinacionCuello = Math.round(Math.abs(lm[7].x - lm[11].x) * 100);
+        }
+
+        // Color dinámico según rango fisiológico
+        const colorEstado = (anguloCodo >= 80 && anguloCodo <= 110) ? '#4ade80' : '#f87171';
+
+        // Dibujar esqueleto articular
+        canvasCtx.strokeStyle = colorEstado;
         canvasCtx.lineWidth = 3;
         for (const conn of POSE_CONNECTIONS) {
           const from = lm[conn[0]];
@@ -124,53 +138,55 @@
           canvasCtx.fill();
         }
 
-        // Mapeo biomecánico a parámetros ROSA
-        if (lm[11] && lm[13] && lm[15]) {
-          const anguloCodo = calcularAngulo(lm[11], lm[13], lm[15]);
-          const inclinacionCuello = Math.round(Math.abs(lm[7].x - lm[11].x) * 100);
+        // Renderizado HUD (Etiquetas sobre articulaciones)
+        if (lm[13]) {
+          canvasCtx.fillStyle = '#ffffff';
+          canvasCtx.font = 'bold 14px sans-serif';
+          canvasCtx.fillText(`${anguloCodo}°`, lm[13].x * canvasElement.width + 10, lm[13].y * canvasElement.height);
+        }
 
-          const datosCaptura = {
-            silla: { 
-              altura: 2, 
-              profundidad: 2, 
-              ajustesAsiento: 1, 
-              apoyabrazos: 2, 
-              ajustesApoyabrazos: 1, 
-              respaldo: inclinacionCuello > 15 ? 3 : 2, 
-              ajustesRespaldo: 1, 
-              tiempoUso: 1 
-            },
-            pantalla: { 
-              posicion: inclinacionCuello > 15 ? 3 : 1, 
-              ajustes: 1, 
-              tiempoUso: 1 
-            },
-            telefono: { posicion: 2, ajustes: 1, tiempoUso: 1 },
-            teclado: { 
-              posicion: (anguloCodo < 80 || anguloCodo > 110) ? 3 : 1, 
-              ajustes: 1, 
-              tiempoUso: 1 
-            },
-            mouse: { posicion: 2, ajustes: 1 }
-          };
+        // Mapeo a motor ROSA
+        const datosCaptura = {
+          silla: { 
+            altura: 2, 
+            profundidad: 2, 
+            ajustesAsiento: 1, 
+            apoyabrazos: 2, 
+            ajustesApoyabrazos: 1, 
+            respaldo: inclinacionCuello > 15 ? 3 : 2, 
+            ajustesRespaldo: 1, 
+            tiempoUso: 1 
+          },
+          pantalla: { 
+            posicion: inclinacionCuello > 15 ? 3 : 1, 
+            ajustes: 1, 
+            tiempoUso: 1 
+          },
+          telefono: { posicion: 2, ajustes: 1, tiempoUso: 1 },
+          teclado: { 
+            posicion: (anguloCodo < 80 || anguloCodo > 110) ? 3 : 1, 
+            ajustes: 1, 
+            tiempoUso: 1 
+          },
+          mouse: { posicion: 2, ajustes: 1 }
+        };
 
-          if (typeof evaluarROSA === 'function') {
-            const evaluacion = evaluarROSA(datosCaptura);
-            
-            document.getElementById('score_silla').innerText = evaluacion.score_silla;
-            document.getElementById('score_pantalla').innerText = evaluacion.score_pantalla_telefono;
-            document.getElementById('score_teclado').innerText = evaluacion.score_teclado_mouse;
-            document.getElementById('score_final').innerText = evaluacion.puntuacion_final;
-            document.getElementById('texto_riesgo').innerText = evaluacion.nivel_riesgo;
+        if (typeof evaluarROSA === 'function') {
+          const evaluacion = evaluarROSA(datosCaptura);
+          
+          document.getElementById('score_silla').innerText = evaluacion.score_silla;
+          document.getElementById('score_pantalla').innerText = evaluacion.score_pantalla_telefono;
+          document.getElementById('score_teclado').innerText = evaluacion.score_teclado_mouse;
+          document.getElementById('score_final').innerText = evaluacion.puntuacion_final;
+          document.getElementById('texto_riesgo').innerText = evaluacion.nivel_riesgo;
 
-            const banner = document.getElementById('banner_riesgo');
-            if (evaluacion.puntuacion_final >= 5) {
-              banner.style.borderColor = '#f87171';
-              document.getElementById('score_final').style.color = '#f87171';
-            } else {
-              banner.style.borderColor = '#4ade80';
-              document.getElementById('score_final').style.color = '#4ade80';
-            }
+          const banner = document.getElementById('banner_riesgo');
+          if (evaluacion.puntuacion_final >= 5) {
+            banner.style.borderColor = '#f87171';
+            document.getElementById('score_final').style.color = '#f87171';
+          } else {
+            banner.style.borderColor = '#4ade80';
+            document.getElementById('score_final').style.color = '#4ade80';
           }
         }
       }
