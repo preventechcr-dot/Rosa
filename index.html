@@ -92,6 +92,8 @@
     pose.onResults(onResults);
 
     function onResults(results) {
+      if (!videoElement.videoWidth) return;
+
       canvasElement.width = videoElement.videoWidth;
       canvasElement.height = videoElement.videoHeight;
 
@@ -127,7 +129,6 @@
           const anguloCodo = calcularAngulo(lm[11], lm[13], lm[15]);
           const inclinacionCuello = Math.round(Math.abs(lm[7].x - lm[11].x) * 100);
 
-          // Construcción dinámica de entrada para rosaEngine.js
           const datosCaptura = {
             silla: { 
               altura: 2, 
@@ -162,7 +163,6 @@
             document.getElementById('score_final').innerText = evaluacion.puntuacion_final;
             document.getElementById('texto_riesgo').innerText = evaluacion.nivel_riesgo;
 
-            // Ajustar color del banner según el nivel de riesgo
             const banner = document.getElementById('banner_riesgo');
             if (evaluacion.puntuacion_final >= 5) {
               banner.style.borderColor = '#f87171';
@@ -178,15 +178,19 @@
     }
 
     async function iniciarCamara() {
-      const camera = new Camera(videoElement, {
-        onFrame: async () => {
-          await pose.send({image: videoElement});
-        },
-        width: 640,
-        height: 480
-      });
-      await camera.start();
-      document.getElementById('btn_cam').style.display = 'none';
+      try {
+        const camera = new Camera(videoElement, {
+          onFrame: async () => {
+            await pose.send({image: videoElement});
+          },
+          width: 640,
+          height: 480
+        });
+        await camera.start();
+        document.getElementById('btn_cam').style.display = 'none';
+      } catch (err) {
+        document.getElementById('texto_riesgo').innerText = `Error al acceder a la cámara: ${err.message}`;
+      }
     }
   </script>
 </body>
