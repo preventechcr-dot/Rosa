@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rosa Tech — Captura Pose</title>
+  <title>Rosa Tech — Análisis Biomecánico</title>
   
-  <!-- MediaPipe CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
 
@@ -14,24 +13,34 @@
     .container { display: flex; flex-direction: column; align-items: center; gap: 15px; }
     .viewport { position: relative; width: 100%; max-width: 640px; aspect-ratio: 4/3; background: #000; border-radius: 12px; overflow: hidden; }
     video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
-    .status { background: #1e293b; padding: 12px 20px; border-radius: 8px; border-left: 4px solid #38bdf8; width: 100%; max-width: 600px; }
+    .metrics-panel { background: #1e293b; padding: 15px; border-radius: 8px; width: 100%; max-width: 610px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .metric { background: #0f172a; padding: 10px; border-radius: 6px; border-left: 3px solid #38bdf8; }
+    .metric-title { font-size: 12px; color: #94a3b8; text-transform: uppercase; }
+    .metric-value { font-size: 18px; font-weight: bold; color: #38bdf8; margin-top: 4px; }
     .btn { background: #0284c7; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; }
   </style>
 </head>
 <body>
 
   <div class="container">
-    <h2>📷 ROSA Tech — Detección de Postura</h2>
+    <h2>📐 ROSA Tech — Análisis Biomecánico</h2>
 
     <div class="viewport">
       <video id="input_video" playsinline></video>
       <canvas id="output_canvas"></canvas>
     </div>
 
-    <button id="btn_cam" class="btn" onclick="iniciarCamara()">Iniciar Cámara</button>
+    <button id="btn_cam" class="btn" onclick="iniciarCamara()">Iniciar Análisis</button>
 
-    <div class="status" id="status_box">
-      <strong>Estado:</strong> Esperando activación de cámara...
+    <div class="metrics-panel">
+      <div class="metric">
+        <div class="metric-title">Ángulo de Codo</div>
+        <div class="metric-value" id="val_codo">--°</div>
+      </div>
+      <div class="metric">
+        <div class="metric-title">Inclinación Cuello</div>
+        <div class="metric-value" id="val_cuello">--°</div>
+      </div>
     </div>
   </div>
 
@@ -41,7 +50,20 @@
     const videoElement = document.getElementById('input_video');
     const canvasElement = document.getElementById('output_canvas');
     const canvasCtx = canvasElement.getContext('2d');
-    const statusBox = document.getElementById('status_box');
+
+    // Conexiones estructurales clave para ROSA
+    const POSE_CONNECTIONS = [
+      [11, 12], [11, 13], [13, 15], // Brazo izquierdo (Hombro-Codo-Muñeca)
+      [12, 14], [14, 16],           // Brazo derecho
+      [11, 23], [12, 24], [23, 24]  // Tronco (Hombros a Caderas)
+    ];
+
+    function calcularAngulo(p1, p2, p3) {
+      const radiants = Math.atan2(p3.y - p2.y, p3.x - p2.x) - Math.atan2(p1.y - p2.y, p1.x - p2.x);
+      let angle = Math.abs((radiants * 180.0) / Math.PI);
+      if (angle > 180.0) angle = 360.0 - angle;
+      return Math.round(angle);
+    }
 
     const pose = new Pose({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
@@ -64,34 +86,55 @@
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
       if (results.poseLandmarks) {
-        for (const landmark of results.poseLandmarks) {
+        const lm = results.poseLandmarks;
+
+        // Trazado de líneas articulares
+        canvasCtx.strokeStyle = '#0284c7';
+        canvasCtx.lineWidth = 3;
+        for (const conn of POSE_CONNECTIONS) {
+          const from = lm[conn[0]];
+          const to = lm[conn[1]];
+          if (from && to) {
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(from.x * canvasElement.width, from.y * canvasElement.height);
+            canvasCtx.lineTo(to.x * canvasElement.width, to.y * canvasElement.height);
+            canvasCtx.stroke();
+          }
+        }
+
+        // Trazado de puntos
+        for (const landmark of lm) {
           canvasCtx.beginPath();
           canvasCtx.arc(landmark.x * canvasElement.width, landmark.y * canvasElement.height, 4, 0, 2 * Math.PI);
           canvasCtx.fillStyle = '#38bdf8';
           canvasCtx.fill();
         }
-        statusBox.innerHTML = `<strong>Estado:</strong> Puntos articulares detectados (${results.poseLandmarks.length})`;
-      } else {
-        statusBox.innerHTML = `<strong>Estado:</strong> Buscando postura en pantalla...`;
+
+        // Cálculos angulares en tiempo real (Ejemplo: Codo izquierdo 11-13-15)
+        if (lm[11] && lm[13] && lm[15]) {
+          const anguloCodo = calcularAngulo(lm[11], lm[13], lm[15]);
+          document.getElementById('val_codo').innerText = `${anguloCodo}°`;
+        }
+
+        // Inclinación de cabeza/cuello (Oreja-Hombro relativa)
+        if (lm[7] && lm[11]) {
+          const anguloCuello = Math.round(Math.abs(lm[7].x - lm[11].x) * 100);
+          document.getElementById('val_cuello').innerText = `${anguloCuello}°`;
+        }
       }
       canvasCtx.restore();
     }
 
     async function iniciarCamara() {
-      statusBox.innerHTML = `<strong>Estado:</strong> Solicitando acceso a la cámara...`;
-      try {
-        const camera = new Camera(videoElement, {
-          onFrame: async () => {
-            await pose.send({image: videoElement});
-          },
-          width: 640,
-          height: 480
-        });
-        await camera.start();
-        document.getElementById('btn_cam').style.display = 'none';
-      } catch (err) {
-        statusBox.innerHTML = `<strong style="color:#f87171;">Error al abrir la cámara:</strong> ${err.message}`;
-      }
+      const camera = new Camera(videoElement, {
+        onFrame: async () => {
+          await pose.send({image: videoElement});
+        },
+        width: 640,
+        height: 480
+      });
+      await camera.start();
+      document.getElementById('btn_cam').style.display = 'none';
     }
   </script>
 </body>
