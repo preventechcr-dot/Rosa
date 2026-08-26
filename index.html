@@ -1,1 +1,53 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rosa Tech — Validador Motor</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; padding: 20px; margin: 0; }
+    .card { background: #1e293b; padding: 20px; border-radius: 12px; border-left: 5px solid #38bdf8; margin-top: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3); }
+    .title { color: #38bdf8; font-weight: bold; font-size: 18px; margin-bottom: 10px; }
+    .alert { color: #f87171; font-weight: bold; font-size: 16px; }
+    pre { background: #020617; padding: 12px; border-radius: 8px; overflow-x: auto; color: #38bdf8; font-size: 13px; }
+  </style>
+</head>
+<body>
 
+  <h2>🧪 Validador del Motor ROSA Tech</h2>
+  <p>Ejecutando evaluación de prueba directamente en la tablet...</p>
+
+  <div id="resultado" class="card">Procesando cálculo del motor...</div>
+
+  <!-- Carga del motor -->
+  <script src="./rosaEngine.js"></script>
+
+  <script>
+    const datosPrueba = {
+      silla: { altura: 2, profundidad: 2, ajustesAsiento: 1, apoyabrazos: 2, ajustesApoyabrazos: 1, respaldo: 2, ajustesRespaldo: 1, tiempoUso: 1 },
+      pantalla: { posicion: 3, ajustes: 1, tiempoUso: 1 },
+      telefono: { posicion: 2, ajustes: 2 },
+      teclado: { posicion: 2, ajustes: 1, tiempoUso: 1 },
+      mouse: { posicion: 2, ajustes: 1 }
+    };
+
+    try {
+      const res = calcularRosa(datosPrueba);
+
+      document.getElementById('resultado').innerHTML = `
+        <div class="title">✓ Motor ROSA Operativo</div>
+        <p><strong>Score Silla:</strong> ${res.score_silla}</p>
+        <p><strong>Score Pantalla/Teléfono:</strong> ${res.score_pantalla_telefono}</p>
+        <p><strong>Score Teclado/Mouse:</strong> ${res.score_teclado_mouse}</p>
+        <p><strong>Puntuación Final ROSA:</strong> <span style="font-size: 24px; font-weight: bold;">${res.puntuacion_final}</span></p>
+        <p class="alert">Nivel de Riesgo: ${res.nivel_riesgo}</p>
+        <hr style="border-color: #334155; margin: 15px 0;">
+        <p>Estructura JSON de respuesta:</p>
+        <pre>${JSON.stringify(res, null, 2)}</pre>
+      `;
+    } catch (error) {
+      document.getElementById('resultado').innerHTML = `<span class="alert">Error al ejecutar el motor: ${error.message}</span><br><br><small>Asegúrate de que el archivo rosaEngine.js existe en la misma carpeta raíz.</small>`;
+    }
+  </script>
+</body>
+</html>
