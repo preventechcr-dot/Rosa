@@ -189,7 +189,8 @@
         await camera.start();
         document.getElementById('btn_cam').style.display = 'none';
       } catch (err) {
-        document.getElementById('texto_riesgo').innerText = `Error al acceder a la cámara: ${err.message}`;
+        const txt = document.getElementById('texto_riesgo');
+        if (txt) txt.innerText = `Error al acceder a la cámara: ${err.message}`;
       }
     }
   </script>
