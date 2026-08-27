@@ -65,7 +65,28 @@
     </div>
   </div>
 
-  <script src="./rosaEngine.js"></script>
+  <script>
+    // Motor ROSA Integrado (Sin dependencia de archivos JS externos)
+    function evaluarROSA(datos) {
+      const sillaScore = datos.silla.respaldo + datos.silla.apoyabrazos;
+      const pantallaScore = datos.pantalla.posicion + datos.telefono.posicion;
+      const tecladoScore = datos.teclado.posicion + datos.mouse.posicion;
+
+      const finalScore = Math.min(10, Math.max(1, Math.round((sillaScore + pantallaScore + tecladoScore) / 2)));
+      
+      let nivel = "Riesgo Bajo";
+      if (finalScore >= 5) nivel = "Riesgo Alto - Requiere Modificación";
+      else if (finalScore >= 3) nivel = "Riesgo Medio";
+
+      return {
+        score_silla: sillaScore,
+        score_pantalla_telefono: pantallaScore,
+        score_teclado_mouse: tecladoScore,
+        puntuacion_final: finalScore,
+        nivel_riesgo: nivel
+      };
+    }
+  </script>
 
   <script>
     const videoElement = document.getElementById('input_video');
@@ -73,7 +94,7 @@
     const canvasCtx = canvasElement.getContext('2d');
 
     let cameraInstance = null;
-    let currentFacingMode = 'user'; // 'user' = frontal, 'environment' = trasera
+    let currentFacingMode = 'user';
 
     const POSE_CONNECTIONS = [
       [11, 12], [11, 13], [13, 15],
@@ -163,23 +184,21 @@
           mouse: { posicion: 2, ajustes: 1 }
         };
 
-        if (typeof evaluarROSA === 'function') {
-          const evaluacion = evaluarROSA(datosCaptura);
-          
-          document.getElementById('score_silla').innerText = evaluacion.score_silla;
-          document.getElementById('score_pantalla').innerText = evaluacion.score_pantalla_telefono;
-          document.getElementById('score_teclado').innerText = evaluacion.score_teclado_mouse;
-          document.getElementById('score_final').innerText = evaluacion.puntuacion_final;
-          document.getElementById('texto_riesgo').innerText = evaluacion.nivel_riesgo;
+        const evaluacion = evaluarROSA(datosCaptura);
+        
+        document.getElementById('score_silla').innerText = evaluacion.score_silla;
+        document.getElementById('score_pantalla').innerText = evaluacion.score_pantalla_telefono;
+        document.getElementById('score_teclado').innerText = evaluacion.score_teclado_mouse;
+        document.getElementById('score_final').innerText = evaluacion.puntuacion_final;
+        document.getElementById('texto_riesgo').innerText = evaluacion.nivel_riesgo;
 
-          const banner = document.getElementById('banner_riesgo');
-          if (evaluacion.puntuacion_final >= 5) {
-            banner.style.borderColor = '#f87171';
-            document.getElementById('score_final').style.color = '#f87171';
-          } else {
-            banner.style.borderColor = '#4ade80';
-            document.getElementById('score_final').style.color = '#4ade80';
-          }
+        const banner = document.getElementById('banner_riesgo');
+        if (evaluacion.puntuacion_final >= 5) {
+          banner.style.borderColor = '#f87171';
+          document.getElementById('score_final').style.color = '#f87171';
+        } else {
+          banner.style.borderColor = '#4ade80';
+          document.getElementById('score_final').style.color = '#4ade80';
         }
       }
       canvasCtx.restore();
@@ -200,6 +219,8 @@
           videoElement.srcObject = null;
         }
 
+        document.getElementById('texto_riesgo').innerText = 'Analizando postura...';
+
         cameraInstance = new Camera(videoElement, {
           onFrame: async () => {
             await pose.send({ image: videoElement });
@@ -217,7 +238,6 @@
         `;
       } catch (err) {
         if (facing === 'environment') {
-          console.warn("Cámara trasera no disponible, reintentando con frontal...");
           iniciarCamara('user');
         } else {
           const txt = document.getElementById('texto_riesgo');
